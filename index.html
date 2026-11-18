@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JSON View</title>
+<meta name="description" content="Format, validate and explore JSON in your browser. Nothing you paste leaves the page.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%232F4BD8'/><text x='8' y='12' font-size='11' font-family='monospace' font-weight='700' text-anchor='middle' fill='white'>{}</text></svg>">
+<style>
+:root {
+  color-scheme: light dark;
+  --s1: .25rem; --s2: .5rem; --s3: .75rem; --s4: 1rem;
+  --radius: .375rem;
+  --gutter: 1rem;
+  --ui: system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+  --paper: light-dark(#F3F5F9, #131826);
+  --panel: light-dark(#FFFFFF, #1A2032);
+  --ink: light-dark(#1A2233, #E4E8F1);
+  --muted: light-dark(#647087, #8D97AB);
+  --line: light-dark(#D9DEE8, #2A3247);
+  --hover: light-dark(#EDF0F7, #232B41);
+  --accent: light-dark(#2F4BD8, #7C93FF);
+  --on-accent: light-dark(#FFFFFF, #0E1320);
+  --bad: light-dark(#C2261C, #FF8A80);
+
+  --key: light-dark(#1F3FBF, #8FA6FF);
+  --str: light-dark(#0A7F62, #5FD4B1);
+  --num: light-dark(#B25309, #F2A65A);
+  --bool: light-dark(#A3247A, #F08BCB);
+
+  /* one colour per nesting depth, shared by a bracket pair and the rail between them */
+  --d0: light-dark(#4F6BED, #7C93FF);
+  --d1: light-dark(#C0399B, #E67FCB);
+  --d2: light-dark(#0F9D84, #4FCFB3);
+  --d3: light-dark(#B98207, #E8B64C);
+}
+* { box-sizing: border-box }
+body {
+  margin: 0; height: 100dvh;
+  display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--paper); color: var(--ink);
+  font: .875rem/1.4 var(--ui);
+}
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); padding: var(--s3) var(--s4) }
+h1 { margin: 0; font: 600 1rem var(--mono) }
+header p { margin: 0; color: var(--muted) }
+header a { margin-left: auto; color: var(--muted) }
+
+main {
+  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  min-height: 0; border-block: 1px solid var(--line); background: var(--panel);
+}
+.pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0 }
+.pane + .pane { border-left: 1px solid var(--line) }
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line) }
+.push { margin-left: auto }
+
+button, select {
+  font: inherit; color: inherit; background: transparent;
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: var(--s1) var(--s3); cursor: pointer;
+}
+button:hover:not(:disabled) { background: var(--hover) }
+button:disabled { opacity: .5; cursor: not-allowed }
+button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
+button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1) }
+button.done::after { content: " ✓" }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
+
+textarea {
+  width: 100%; height: 100%; resize: none; border: 0; outline-offset: -2px;
+  padding: var(--s4); background: transparent; color: inherit;
+  font: .8125rem/1.6 var(--mono); tab-size: 4;
+}
+#tree {
+  --c: var(--muted);
+  overflow: auto; padding: var(--s4) var(--s3);
+  font: .8125rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.row, summary, .end { padding-left: var(--gutter); border-radius: var(--s1) }
+.row:hover, summary:hover, .end:hover { background: var(--hover) }
+summary { list-style: none; cursor: pointer; position: relative }
+summary::-webkit-details-marker { display: none }
+summary::before {
+  content: ""; position: absolute; left: .2rem; top: .5em;
+  border: .3em solid transparent; border-right-width: 0; border-left-color: var(--muted);
+  transition: rotate .12s;
+}
+details[open] > summary::before { rotate: 90deg }
+details[open] > summary > .fold { display: none }
+.kids { margin-left: .35rem; padding-left: .65rem; border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent) }
+.c0 { --c: var(--d0) } .c1 { --c: var(--d1) } .c2 { --c: var(--d2) } .c3 { --c: var(--d3) }
+.br { color: var(--c); font-weight: 600 }
+.count { color: var(--muted); font-style: italic }
+.key { color: var(--key) } .str { color: var(--str) } .num { color: var(--num) } .bool { color: var(--bool) } .nul { color: var(--muted) }
+#tree a { color: inherit; text-underline-offset: .2em }
+
+.note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding-left: var(--gutter); color: var(--muted); font-family: var(--ui); font-size: .875rem }
+.note.bad { color: var(--bad) }
+.note svg { flex: none; width: 1rem; height: 1rem }
+.note button { color: var(--ink) }
+
+footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem; padding: var(--s1) var(--s4); color: var(--muted); font-size: .8125rem }
+#path { margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-color: transparent; font-family: var(--mono); color: var(--ink) }
+
+@media (max-width: 45rem) {
+  body { height: auto; min-height: 100dvh }
+  main { grid-template-columns: minmax(0, 1fr) }
+  .pane + .pane { border-left: 0; border-top: 1px solid var(--line) }
+  textarea { height: 40dvh }
+  #tree { min-height: 40dvh }
+}
+@media (prefers-reduced-motion: reduce) { summary::before { transition: none } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="br c0">{</span><span class="key">"json"</span>: <span class="str">"view"</span><span class="br c0">}</span></h1>
+  <p>Runs in your browser. Nothing you paste is sent anywhere.</p>
+  <a href="https://github.com/diwakersurya/json-view">Source</a>
+</header>
+
+<main>
+  <section class="pane">
+    <div class="bar">
+      <button id="format" class="primary" data-valid="Format (Ctrl or ⌘ + Enter)">Format</button>
+      <button id="minify" data-valid="">Minify</button>
+      <label>Indent
+        <select id="indent">
+          <option value="2">2 spaces</option>
+          <option value="4">4 spaces</option>
+          <option value="tab">Tab</option>
+        </select>
+      </label>
+      <button id="open" class="push">Open file</button>
+      <input id="file" type="file" accept=".json,application/json,text/plain" hidden>
+      <button id="sample">Sample</button>
+      <button id="clear">Clear</button>
+    </div>
+    <textarea id="input" aria-label="JSON input" placeholder="Paste JSON here" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+  </section>
+
+  <section class="pane">
+    <div class="bar">
+      <button id="expand" data-valid="">Expand all</button>
+      <button id="collapse" data-valid="">Collapse all</button>
+      <button id="copy" class="push" data-valid="Copy the formatted JSON">Copy JSON</button>
+    </div>
+    <div id="tree"></div>
+  </section>
+</main>
+
+<footer>
+  <span id="status" aria-live="polite"></span>
+  <button id="path" title="Copy path" hidden></button>
+</footer>
+
+<script>
+const $ = id => document.getElementById(id);
+const input = $('input'), tree = $('tree'), statusEl = $('status'), pathBtn = $('path');
+
+const SAMPLE = `{
+  "mission": "Voyager 1",
+  "launched": "1977-09-05",
+  "active": true,
+  "speedKmPerSec": 17.0,
+  "frameCounter": 9007199254740993,
+  "returnDate": null,
+  "instruments": [
+    "Magnetometer",
+    "Plasma Wave Subsystem",
+    "Cosmic Ray Subsystem",
+    "Low-Energy Charged Particle"
+  ],
+  "cameras": { "on": false, "lastImage": "1990-02-14" },
+  "goldenRecord": {
+    "images": 115,
+    "greetingLanguages": 55,
+    "musicMinutes": 90,
+    "tracks": [
+      { "title": "Johnny B. Goode", "artist": "Chuck Berry" },
+      { "title": "Dark Was the Night, Cold Was the Ground", "artist": "Blind Willie Johnson" }
+    ]
+  },
+  "more": "https://science.nasa.gov/mission/voyager/voyager-1/",
+  "notes": {},
+  "log": []
+}`;
+
+// ponytail: built on JSON.parse, so duplicate keys collapse and integer-like keys move to
+// the front of their object. Write a real tokenizer if byte-faithful key order matters.
+// Numbers are kept as written (1.0, big integers) where the browser exposes their source text.
+const keepRaw = typeof JSON.rawJSON === 'function';
+class Num { constructor(src) { this.src = src } }
+const parse = text => JSON.parse(text, keepRaw
+  ? (k, v, ctx) => typeof v === 'number' && ctx?.source && ctx.source !== String(v) ? new Num(ctx.source) : v
+  : undefined);
+const stringify = (v, indent) => JSON.stringify(v, (k, x) => x instanceof Num ? JSON.rawJSON(x.src) : x, indent);
+const isBox = v => v !== null && typeof v === 'object' && !(v instanceof Num);
+
+// Browsers word JSON errors differently: "position 42", "line 3 column 5", or no location at all.
+function errorPos(msg, text) {
+  let m = /position (\d+)/.exec(msg), offset;
+  if (m) offset = +m[1];
+  else if ((m = /line (\d+) column (\d+)/.exec(msg)))
+    offset = text.split('\n').slice(0, m[1] - 1).join('\n').length + (m[1] > 1) + (m[2] - 1);
+  else return null;
+  const before = text.slice(0, offset).split('\n');
+  return { offset, line: before.length, col: before.at(-1).length + 1 };
+}
+const cleanError = msg => msg.replace(/^JSON\.parse: |^JSON Parse error: | in JSON at position.*$| at line \d+ column \d+ of the JSON data$/g, '');
+
+const pathStr = parts => '$' + parts.map(k =>
+  typeof k === 'number' ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? '.' + k : `[${JSON.stringify(k)}]`).join('');
+
+function count(root) {
+  let n = 0;
+  for (const stack = [root]; stack.length;) {
+    const v = stack.pop();
+    n++;
+    if (isBox(v)) for (const x of Array.isArray(v) ? v : Object.values(v)) stack.push(x);
+  }
+  return n;
+}
+const size = text => {
+  const b = new Blob([text]).size;
+  return b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+};
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
+}
+
+function leaf(v) {
+  if (v === null) return el('span', 'nul', 'null');
+  if (v instanceof Num) return el('span', 'num', v.src);
+  if (typeof v !== 'string') return el('span', typeof v === 'number' ? 'num' : 'bool', String(v));
+  const s = el('span', 'str', JSON.stringify(v));
+  if (!/^https?:\/\/\S+$/.test(v)) return s;
+  const a = el('a');
+  a.href = v; a.target = '_blank'; a.rel = 'noopener noreferrer';
+  a.append(s);
+  return a;
+}
+
+let value, valid = false, eager = true, timer = 0;
+
+// One node of the tree. Objects and arrays are <details>; their children are built on first open.
+function node(k, v, depth, last) {
+  const arr = Array.isArray(v);
+  const n = isBox(v) ? (arr ? v.length : Object.keys(v).length) : 0;
+  const [open, close] = arr ? '[]' : '{}';
+  const comma = last ? '' : ',';
+  const head = el(n ? 'summary' : 'div', n ? '' : 'row');
+  if (typeof k === 'string') head.append(el('span', 'key', JSON.stringify(k)), ': ');
+  if (!n) {
+    head.append(isBox(v) ? el('span', 'br', open + close) : leaf(v), comma);
+    head.k = k;
+    return head;
+  }
+  const d = el('details', 'c' + depth % 4), fold = el('span', 'fold'), end = el('div', 'end');
+  fold.append(el('span', 'count', ` ${n.toLocaleString()} ${arr ? 'item' : 'key'}${n > 1 ? 's' : ''} `), el('span', 'br', close), comma);
+  head.append(el('span', 'br', open), fold);
+  end.append(el('span', 'br', close), comma);
+  d.append(head, el('div', 'kids'), end);
+  Object.assign(d, { k, v, depth });
+  if (eager || depth < 2) { d.open = true; fill(d); }
+  return d;
+}
+function fill(d) {
+  if (d.filled) return;
+  d.filled = true;
+  const items = Array.isArray(d.v) ? d.v.map((x, i) => [i, x]) : Object.entries(d.v);
+  const frag = document.createDocumentFragment();
+  items.forEach(([k, x], i) => frag.append(node(k, x, d.depth + 1, i === items.length - 1)));
+  d.children[1].append(frag);
+}
+
+const ALERT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v4M8 11.2v.1"/></svg>';
+
+function update() {
+  const text = input.value;
+  tree.replaceChildren();
+  pathBtn.hidden = true;
+  valid = false;
+  statusEl.textContent = '';
+  if (!text.trim()) {
+    tree.append(el('div', 'note', 'Paste JSON on the left, or drop a file anywhere on this page.'));
+  } else {
+    try { value = parse(text); valid = true; }
+    catch (e) {
+      const pos = errorPos(e.message, text), box = el('div', 'note bad');
+      box.innerHTML = ALERT;
+      box.append(el('span', '', (pos ? `Line ${pos.line}, column ${pos.col}: ` : '') + cleanError(e.message)));
+      if (pos) {
+        const show = el('button', '', 'Show in input');
+        show.onclick = () => {
+          input.focus();
+          input.setSelectionRange(pos.offset, pos.offset + 1);
+          input.scrollTop = Math.max(0, (pos.line - 1) * parseFloat(getComputedStyle(input).lineHeight) - input.clientHeight / 2);
+        };
+        box.append(show);
+      }
+      tree.append(box);
+      statusEl.textContent = 'Invalid JSON.';
+    }
+  }
+  if (valid) {
+    const n = count(value);
+    // ponytail: past 5,000 values only the top two levels start open, the rest build on demand.
+    eager = n <= 5000;
+    tree.append(node(undefined, value, 0, true));
+    statusEl.textContent = `Valid JSON. ${n.toLocaleString()} ${n === 1 ? 'value' : 'values'}, ${size(text)}.`;
+  }
+  for (const b of document.querySelectorAll('[data-valid]')) {
+    b.disabled = !valid;
+    b.title = valid ? b.dataset.valid : 'Needs valid JSON';
+  }
+}
+
+const load = text => { input.value = text; update(); };
+// Typing is debounced, so flush a pending parse before acting on `value`.
+const fresh = () => { if (timer) { clearTimeout(timer); timer = 0; update(); } return valid; };
+const indent = () => $('indent').value === 'tab' ? '\t' : +$('indent').value;
+const copy = (text, btn) => navigator.clipboard.writeText(text).then(
+  () => { btn.classList.add('done'); setTimeout(() => btn.classList.remove('done'), 1200); },
+  () => { statusEl.textContent = 'Copying was blocked by the browser.'; });
+
+input.addEventListener('input', () => {
+  clearTimeout(timer);
+  timer = setTimeout(() => { timer = 0; update(); }, 150);
+});
+input.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') $('format').click(); });
+
+$('format').onclick = () => fresh() && load(stringify(value, indent()));
+$('minify').onclick = () => fresh() && load(stringify(value));
+$('indent').onchange = () => fresh() && load(stringify(value, indent()));
+$('copy').onclick = e => fresh() && copy(stringify(value, indent()), e.currentTarget);
+$('sample').onclick = () => load(SAMPLE);
+$('clear').onclick = () => { load(''); input.focus(); };
+$('open').onclick = () => $('file').click();
+$('file').onchange = e => { e.target.files[0]?.text().then(load); e.target.value = ''; };
+
+addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); });
+addEventListener('drop', e => {
+  if (!e.dataTransfer.files.length) return;
+  e.preventDefault();
+  e.dataTransfer.files[0].text().then(load);
+});
+
+tree.addEventListener('toggle', e => { if (e.target.open) fill(e.target); }, true);
+$('expand').onclick = () => {
+  // ponytail: opens every node at once, slow past ~100k values. Virtualise the tree if that matters.
+  for (let closed; (closed = tree.querySelectorAll('details:not([open])')).length;)
+    closed.forEach(d => { d.open = true; fill(d); });
+};
+$('collapse').onclick = () => tree.querySelectorAll('details details[open]').forEach(d => { d.open = false; });
+
+function showPath(e) {
+  const n = e.target.closest('.row, summary, .end');
+  if (!n) return;
+  const parts = [];
+  for (let x = n.matches('.row') ? n : n.parentElement; x; x = x.parentElement.closest('details'))
+    if (x.k !== undefined) parts.unshift(x.k);
+  pathBtn.textContent = pathStr(parts);
+  pathBtn.hidden = false;
+}
+tree.addEventListener('mouseover', showPath);
+tree.addEventListener('focusin', showPath);
+pathBtn.onclick = () => copy(pathBtn.textContent, pathBtn);
+
+load(SAMPLE);
+
+// Self-check: open index.html?test and read the tab title.
+if (location.search === '?test') {
+  const broken = '{\n"a":}';
+  const checks = {
+    path: pathStr(['a', 0, 'b c']) === '$.a[0]["b c"]',
+    position: JSON.stringify(errorPos('Unexpected token in JSON at position 6', broken)) === '{"offset":6,"line":2,"col":5}',
+    lineColumn: errorPos('JSON.parse: unexpected character at line 2 column 5 of the JSON data', broken).offset === 6,
+    noLocation: errorPos('JSON Parse error: Unexpected identifier', broken) === null,
+    roundTrip: stringify(parse('{"a":[1,{"b":null}],"c":"x"}')) === '{"a":[1,{"b":null}],"c":"x"}',
+    exactNumbers: !keepRaw || stringify(parse('[1.0,9007199254740993]')) === '[1.0,9007199254740993]',
+    count: count(parse('{"a":[1,2],"b":{}}')) === 5,
+    treeText: tree.textContent.includes('"Voyager 1"') && tree.querySelectorAll('details').length === 7,
+  };
+  const failed = Object.keys(checks).filter(k => !checks[k]);
+  document.title = failed.length ? 'TESTS FAILED: ' + failed.join(', ') : 'TESTS OK';
+}
+</script>
+</body>
+</html>
