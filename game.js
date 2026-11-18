@@ -207,11 +207,20 @@ window.jsonDungeon = (() => {
         }
       }
 
-      // The player: a text cursor with eyes.
+      // The player: a square chomper. Its mouth points the way it walks and works while it moves.
       const px = me.rx * T + T / 2, py = me.ry * T + T / 2 + (calm ? 0 : Math.sin(now / 260) * 1.5);
-      box(px - 10, py - 10, 20, 20, 6); ctx.fillStyle = C.accent; ctx.fill();
-      ctx.fillStyle = C['on-accent'];
-      for (const side of [-4, 4]) { circle(px + side + me.face[0] * 2, py - 1 + me.face[1] * 2, 2); ctx.fill(); }
+      const [fx, fy] = me.face, open = calm ? 4 : tween ? 2 + 5 * Math.abs(Math.sin(now / 70)) : 2;
+      ctx.save();
+      box(px - 10, py - 10, 20, 20, 6); ctx.clip();
+      ctx.beginPath(); ctx.rect(px - 11, py - 11, 22, 22);   // body minus the mouth wedge (even-odd)
+      ctx.moveTo(px - fx, py - fy);
+      ctx.lineTo(px + fx * 11 - fy * open, py + fy * 11 + fx * open);
+      ctx.lineTo(px + fx * 11 + fy * open, py + fy * 11 - fx * open);
+      ctx.closePath();
+      ctx.fillStyle = C.accent; ctx.fill('evenodd');
+      ctx.restore();
+      ctx.fillStyle = C['on-accent'];                        // one eye in profile, two when seen head-on
+      for (const s of fx ? [0] : [-5.5, 5.5]) { circle(px - fx + s, py - fy - (fx ? 5.5 : 0), 2); ctx.fill(); }
       ctx.restore();
 
       if (flash > 0) {
