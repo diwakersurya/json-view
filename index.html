@@ -387,7 +387,15 @@ tree.addEventListener('mouseover', showPath);
 tree.addEventListener('focusin', showPath);
 pathBtn.onclick = () => copy(pathBtn.textContent, pathBtn);
 
-load(SAMPLE);
+// JSON can be handed over in the URL fragment: #<percent-encoded JSON>. A fragment is never
+// sent to the server, so this keeps the "nothing leaves your browser" promise.
+const decodeHash = raw => { try { return decodeURIComponent(raw); } catch { return raw; } };
+function loadHash() {
+  const raw = location.hash.slice(1);
+  if (raw) load(decodeHash(raw));
+  return !!raw;
+}
+if (!loadHash()) load(SAMPLE);
 
 // Game mode. game.js is fetched only when asked for, so the viewer itself stays one file.
 const playLink = $('play');
@@ -415,6 +423,7 @@ playLink.onclick = e => {
   syncMode();
 };
 addEventListener('popstate', syncMode);
+addEventListener('hashchange', () => { if (loadHash()) syncMode(); });
 syncMode();
 
 // Self-check: open index.html?test and read the tab title.
@@ -428,6 +437,8 @@ if (location.search === '?test') {
     roundTrip: stringify(parse('{"a":[1,{"b":null}],"c":"x"}')) === '{"a":[1,{"b":null}],"c":"x"}',
     exactNumbers: !keepRaw || stringify(parse('[1.0,9007199254740993]')) === '[1.0,9007199254740993]',
     count: count(parse('{"a":[1,2],"b":{}}')) === 5,
+    hashEncoded: decodeHash('%7B%22a%22%3A%20%22x%20y%22%7D') === '{"a": "x y"}',
+    hashRaw: decodeHash('{"a":"50%"}') === '{"a":"50%"}',
     treeText: tree.textContent.includes('"Voyager 1"') && tree.querySelectorAll('details').length === 7,
   };
   loadGame().then(() => {

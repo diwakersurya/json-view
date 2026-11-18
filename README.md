@@ -14,6 +14,30 @@ Format, validate and explore JSON in the browser.
 
 Everything runs in the page. There are no dependencies, no build step and no network requests, so nothing you paste leaves your machine.
 
+## Open with JSON in the URL
+
+Put percent-encoded JSON after `#` and the page opens with it loaded:
+
+```
+https://diwakersurya.github.io/json-view/#%7B%22hello%22%3A%5B1%2C2%5D%7D
+```
+
+The part after `#` is never sent to the server, so the JSON still stays on your machine. It also works with game mode: `?mode=game#…`.
+
+Open whatever is on the clipboard, from a macOS shell:
+
+```sh
+jv() { open "https://diwakersurya.github.io/json-view/#$(pbpaste | jq -sRr @uri)"; }
+```
+
+Or as a [Raycast](https://www.raycast.com) Quicklink, which percent-encodes the clipboard for you:
+
+```
+https://diwakersurya.github.io/json-view/#{clipboard}
+```
+
+URLs have a length limit, so for very large documents open or drop the file instead.
+
 ## Game mode
 
 Press **Play**, or open [`?mode=game`](https://diwakersurya.github.io/json-view/?mode=game), and the JSON you pasted becomes a dungeon drawn on a canvas.
