@@ -14,6 +14,22 @@ Format, validate and explore JSON in the browser.
 
 Everything runs in the page. There are no dependencies, no build step and no network requests, so nothing you paste leaves your machine.
 
+## Game mode
+
+Press **Play**, or open [`?mode=game`](https://diwakersurya.github.io/json-view/?mode=game), and the JSON you pasted becomes a dungeon drawn on a canvas.
+
+- Every object or array is a room. Objects have rounded walls, arrays have square ones, and the wall colour is the nesting depth.
+- Children lie on the floor: notes are strings, coins are numbers, switches are booleans, an empty ring is `null`, and a hatch leads into a nested object or array.
+- The game names a path, such as `$.goldenRecord.tracks[1].artist`. Walk there and claim the value. The part of the path you have reached lights up.
+
+| | Keyboard | Touch or mouse |
+|---|---|---|
+| Walk | Arrows or WASD, Shift to run | Tap a spot |
+| Use what you stand on | Enter or Space | Tap yourself |
+| Go up a level | Esc or Backspace | Use the stairs in the corner |
+
+Play switches in place, so the JSON in the input comes along. Opening `?mode=game` directly plays the sample.
+
 ## Run locally
 
 ```sh

@@ -46,7 +46,15 @@ body {
 header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); padding: var(--s3) var(--s4) }
 h1 { margin: 0; font: 600 1rem var(--mono) }
 header p { margin: 0; color: var(--muted) }
-header a { margin-left: auto; color: var(--muted) }
+header nav { margin-left: auto; display: flex; gap: var(--s4) }
+header a { color: var(--muted) }
+#play { color: var(--accent); font-weight: 600 }
+
+/* Game mode (?mode=game): the canvas takes the place of both panes. */
+#game { display: none; width: 100%; height: 100%; min-height: 0; outline: none; touch-action: none }
+body.game { height: 100dvh }
+body.game main, body.game footer { display: none }
+body.game #game { display: block }
 
 main {
   display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
@@ -119,7 +127,10 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
 <header>
   <h1><span class="br c0">{</span><span class="key">"json"</span>: <span class="str">"view"</span><span class="br c0">}</span></h1>
   <p>Runs in your browser. Nothing you paste is sent anywhere.</p>
-  <a href="https://github.com/diwakersurya/json-view">Source</a>
+  <nav>
+    <a id="play" href="?mode=game">Play</a>
+    <a href="https://github.com/diwakersurya/json-view">Source</a>
+  </nav>
 </header>
 
 <main>
@@ -151,6 +162,8 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
     <div id="tree"></div>
   </section>
 </main>
+
+<canvas id="game" tabindex="0" aria-label="JSON dungeon. Exit the game for the standard viewer."></canvas>
 
 <footer>
   <span id="status" aria-live="polite"></span>
@@ -376,6 +389,34 @@ pathBtn.onclick = () => copy(pathBtn.textContent, pathBtn);
 
 load(SAMPLE);
 
+// Game mode. game.js is fetched only when asked for, so the viewer itself stays one file.
+const playLink = $('play');
+let gameScript;
+const loadGame = () => gameScript ??= new Promise((ok, fail) => {
+  const s = el('script');
+  s.src = 'game.js'; s.onload = ok; s.onerror = fail;
+  document.head.append(s);
+});
+function syncMode() {
+  const game = new URLSearchParams(location.search).get('mode') === 'game';
+  document.body.classList.toggle('game', game);
+  playLink.textContent = game ? 'Exit game' : 'Play';
+  playLink.href = game ? location.pathname : '?mode=game';
+  if (!game) return window.jsonDungeon?.stop();
+  loadGame().then(
+    () => { if (document.body.classList.contains('game')) jsonDungeon.start($('game'), fresh() ? value : parse(SAMPLE), !valid && !!input.value.trim()); },
+    () => { gameScript = undefined; history.replaceState(null, '', location.pathname); syncMode(); statusEl.textContent = 'The game did not load. Check your connection and press Play again.'; });
+}
+// Switch in place so the JSON you pasted comes along.
+playLink.onclick = e => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  history.pushState(null, '', playLink.href);
+  syncMode();
+};
+addEventListener('popstate', syncMode);
+syncMode();
+
 // Self-check: open index.html?test and read the tab title.
 if (location.search === '?test') {
   const broken = '{\n"a":}';
@@ -389,8 +430,18 @@ if (location.search === '?test') {
     count: count(parse('{"a":[1,2],"b":{}}')) === 5,
     treeText: tree.textContent.includes('"Voyager 1"') && tree.querySelectorAll('details').length === 7,
   };
-  const failed = Object.keys(checks).filter(k => !checks[k]);
-  document.title = failed.length ? 'TESTS FAILED: ' + failed.join(', ') : 'TESTS OK';
+  loadGame().then(() => {
+    const { room, tileOf, indexAt, pickTarget } = jsonDungeon, r = room(parse(SAMPLE));
+    checks.roomSize = r.cols === 5 && r.W === 27 && r.H === 14;
+    checks.tilesRoundTrip = r.items.every((it, i) => indexAt(r, ...tileOf(r, i)) === i);
+    checks.emptyTiles = indexAt(r, 0, 0) === -1 && indexAt(r, 4, 3) === -1 && indexAt(r, 13, 11) === -1;
+    checks.targetFirst = pathStr(pickTarget(parse(SAMPLE), () => 0)) === '$.mission';
+    checks.targetDeep = pathStr(pickTarget(parse('{"a":[{"b":1}]}'))) === '$.a[0].b';
+    checks.targetNone = pickTarget(parse('{"a":{},"b":[]}')) === null;
+  }).catch(() => { checks.gameLoaded = false; }).then(() => {
+    const failed = Object.keys(checks).filter(k => !checks[k]);
+    document.title = failed.length ? 'TESTS FAILED: ' + failed.join(', ') : 'TESTS OK';
+  });
 }
 </script>
 </body>
