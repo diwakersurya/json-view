@@ -110,6 +110,19 @@ details[open] > summary > .fold { display: none }
 .note svg { flex: none; width: 1rem; height: 1rem }
 .note button { color: var(--ink) }
 
+#toast {
+  position: fixed; left: 50%; bottom: 3rem; z-index: 1; translate: -50% var(--s2);
+  display: flex; align-items: center; gap: var(--s2);
+  width: max-content; max-width: min(36rem, calc(100vw - 2rem));
+  padding: var(--s2) var(--s2) var(--s2) var(--s3);
+  background: var(--panel); border: 1px solid var(--bad); border-radius: var(--radius);
+  box-shadow: 0 .5rem 1.5rem light-dark(rgb(26 34 51 / .18), rgb(0 0 0 / .5));
+  opacity: 0; visibility: hidden; transition: opacity .2s, translate .2s, visibility .2s;
+}
+#toast.show { opacity: 1; visibility: visible; translate: -50% 0 }
+#toast svg { flex: none; width: 1rem; height: 1rem; color: var(--bad) }
+#toast button { border-color: transparent; padding: 0 var(--s2); color: var(--muted) }
+
 footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem; padding: var(--s1) var(--s4); color: var(--muted); font-size: .8125rem }
 #path { margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-color: transparent; font-family: var(--mono); color: var(--ink) }
 
@@ -120,7 +133,7 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
   textarea { height: 40dvh }
   #tree { min-height: 40dvh }
 }
-@media (prefers-reduced-motion: reduce) { summary::before { transition: none } }
+@media (prefers-reduced-motion: reduce) { summary::before, #toast { transition: none } }
 </style>
 </head>
 <body>
@@ -138,14 +151,13 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
     <div class="bar">
       <button id="format" class="primary" data-valid="Format (Ctrl or ⌘ + Enter)">Format</button>
       <button id="minify" data-valid="">Minify</button>
-      <label>Indent
-        <select id="indent">
-          <option value="2">2 spaces</option>
-          <option value="4">4 spaces</option>
-          <option value="tab">Tab</option>
-        </select>
-      </label>
-      <button id="open" class="push">Open file</button>
+      <select id="indent" aria-label="Indent" title="Indent">
+        <option value="2">2 spaces</option>
+        <option value="4">4 spaces</option>
+        <option value="tab">Tab</option>
+      </select>
+      <button id="paste" class="push" title="Replace the input with the clipboard">Paste</button>
+      <button id="open" title="Open a JSON file">Open</button>
       <input id="file" type="file" accept=".json,application/json,text/plain" hidden>
       <button id="sample">Sample</button>
       <button id="clear">Clear</button>
@@ -169,6 +181,8 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
   <span id="status" aria-live="polite"></span>
   <button id="path" title="Copy path" hidden></button>
 </footer>
+
+<div id="toast" role="alert"><span id="toast-text"></span><button id="toast-close" aria-label="Dismiss">✕</button></div>
 
 <script>
 const $ = id => document.getElementById(id);
@@ -337,15 +351,36 @@ function update() {
 }
 
 const load = text => { input.value = text; update(); };
+// Pasted JSON (Ctrl/⌘ + V, the Paste button, a link) is formatted on arrival. Anything
+// that is not valid JSON is left exactly as it came, so the error points at the real text.
+function formatIfValid() {
+  try { input.value = stringify(parse(input.value), indent()); } catch {}
+  update();
+  if (valid) toastEl.classList.remove('show');   // a good paste answers whatever the toast was asking for
+  return valid;
+}
+const loadFormatted = text => { input.value = text; return formatIfValid(); };
+
+const toastEl = $('toast');
+let toastTimer;
+toastEl.insertAdjacentHTML('afterbegin', ALERT);
+function toast(msg) {
+  $('toast-text').textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 8000);
+}
+$('toast-close').onclick = () => toastEl.classList.remove('show');
 // Typing is debounced, so flush a pending parse before acting on `value`.
 const fresh = () => { if (timer) { clearTimeout(timer); timer = 0; update(); } return valid; };
 const indent = () => $('indent').value === 'tab' ? '\t' : +$('indent').value;
 const copy = (text, btn) => navigator.clipboard.writeText(text).then(
   () => { btn.classList.add('done'); setTimeout(() => btn.classList.remove('done'), 1200); },
-  () => { statusEl.textContent = 'Copying was blocked by the browser.'; });
+  () => toast('The browser blocked copying. Select the text and copy it yourself.'));
 
-input.addEventListener('input', () => {
+input.addEventListener('input', e => {
   clearTimeout(timer);
+  if (e.inputType === 'insertFromPaste') { timer = 0; return formatIfValid(); }
   timer = setTimeout(() => { timer = 0; update(); }, 150);
 });
 input.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') $('format').click(); });
@@ -354,6 +389,9 @@ $('format').onclick = () => fresh() && load(stringify(value, indent()));
 $('minify').onclick = () => fresh() && load(stringify(value));
 $('indent').onchange = () => fresh() && load(stringify(value, indent()));
 $('copy').onclick = e => fresh() && copy(stringify(value, indent()), e.currentTarget);
+$('paste').onclick = () => (navigator.clipboard?.readText ? navigator.clipboard.readText() : Promise.reject()).then(
+  text => text.trim() ? loadFormatted(text) : toast('The clipboard has no text to paste.'),
+  () => toast('The browser blocked clipboard access. Click the input and press Ctrl or ⌘ + V.'));
 $('sample').onclick = () => load(SAMPLE);
 $('clear').onclick = () => { load(''); input.focus(); };
 $('open').onclick = () => $('file').click();
@@ -389,11 +427,20 @@ pathBtn.onclick = () => copy(pathBtn.textContent, pathBtn);
 
 // JSON can be handed over in the URL fragment: #<percent-encoded JSON>. A fragment is never
 // sent to the server, so this keeps the "nothing leaves your browser" promise.
+const isGame = () => new URLSearchParams(location.search).get('mode') === 'game';
 const decodeHash = raw => { try { return decodeURIComponent(raw); } catch { return raw; } };
+// A link whose JSON does not parse is dropped from the URL and reported, so a reload or a
+// shared link does not keep serving the broken data and the user knows to paste again.
 function loadHash() {
   const raw = location.hash.slice(1);
-  if (raw) load(decodeHash(raw));
-  return !!raw;
+  if (!raw) return false;
+  if (!loadFormatted(decodeHash(raw))) {
+    history.replaceState(null, '', location.pathname + location.search);
+    toast(isGame()
+      ? 'The JSON in the link is not valid, so the game is playing the sample. Exit the game to paste it again.'
+      : 'The JSON in the link is not valid. Copy it again, then press Paste.');
+  }
+  return true;
 }
 if (!loadHash()) load(SAMPLE);
 
@@ -406,14 +453,19 @@ const loadGame = () => gameScript ??= new Promise((ok, fail) => {
   document.head.append(s);
 });
 function syncMode() {
-  const game = new URLSearchParams(location.search).get('mode') === 'game';
+  const game = isGame();
   document.body.classList.toggle('game', game);
   playLink.textContent = game ? 'Exit game' : 'Play';
   playLink.href = game ? location.pathname : '?mode=game';
   if (!game) return window.jsonDungeon?.stop();
   loadGame().then(
-    () => { if (document.body.classList.contains('game')) jsonDungeon.start($('game'), fresh() ? value : parse(SAMPLE), !valid && !!input.value.trim()); },
-    () => { gameScript = undefined; history.replaceState(null, '', location.pathname); syncMode(); statusEl.textContent = 'The game did not load. Check your connection and press Play again.'; });
+    () => {
+      if (!document.body.classList.contains('game')) return;
+      jsonDungeon.start($('game'), fresh() ? value : parse(SAMPLE));
+      // A bad link has already said so; do not talk over it.
+      if (!valid && input.value.trim() && !toastEl.classList.contains('show')) toast('The input is not valid JSON, so the game is playing the sample.');
+    },
+    () => { gameScript = undefined; history.replaceState(null, '', location.pathname); syncMode(); toast('The game did not load. Check your connection and press Play again.'); });
 }
 // Switch in place so the JSON you pasted comes along.
 playLink.onclick = e => {
@@ -440,6 +492,8 @@ if (location.search === '?test') {
     hashEncoded: decodeHash('%7B%22a%22%3A%20%22x%20y%22%7D') === '{"a": "x y"}',
     hashRaw: decodeHash('{"a":"50%"}') === '{"a":"50%"}',
     treeText: tree.textContent.includes('"Voyager 1"') && tree.querySelectorAll('details').length === 7,
+    pasteFormats: loadFormatted('{"a":[1.0,true]}') && input.value === '{\n  "a": [\n    1.0,\n    true\n  ]\n}',
+    pasteKeepsBadText: !loadFormatted('{"a":') && input.value === '{"a":',
   };
   loadGame().then(() => {
     const { room, tileOf, indexAt, pickTarget } = jsonDungeon, r = room(parse(SAMPLE));

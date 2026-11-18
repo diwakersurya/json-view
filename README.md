@@ -8,6 +8,7 @@ Format, validate and explore JSON in the browser.
 - Syntax-highlighted tree you can fold, with a colour per nesting depth
 - Errors point at the line and column, with a jump to that spot in the input
 - Hover a row to see its path (`$.goldenRecord.tracks[0].title`), click the path to copy it
+- Paste with Ctrl/⌘ + V or the **Paste** button and valid JSON is formatted on arrival
 - Open or drop a `.json` file
 - Numbers stay as written (`1.0`, big integers) in browsers that expose number source text
 - Light and dark, following your system setting
@@ -23,6 +24,8 @@ https://diwakersurya.github.io/json-view/#%7B%22hello%22%3A%5B1%2C2%5D%7D
 ```
 
 The part after `#` is never sent to the server, so the JSON still stays on your machine. It also works with game mode: `?mode=game#…`.
+
+JSON from a link is formatted like a paste. If it does not parse, the page says so and removes it from the URL, so you can copy it again and press **Paste**.
 
 Open whatever is on the clipboard, from a macOS shell:
 

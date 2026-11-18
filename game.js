@@ -61,7 +61,7 @@ window.jsonDungeon = (() => {
 
   let stop = () => {};
 
-  function start(cv, root, usedSample) {
+  function start(cv, root) {
     stop();
     const ctx = cv.getContext('2d'), ac = new AbortController(), on = { signal: ac.signal };
     const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -308,7 +308,6 @@ window.jsonDungeon = (() => {
     fit();
 
     if (stack.length) newTarget();
-    if (usedSample) say('That input was not valid JSON, so this is the sample.');
     cv.focus({ preventScroll: true });
     let last = performance.now();
     const frame = now => { update(now); draw(now, now - last); last = now; raf = requestAnimationFrame(frame); };
