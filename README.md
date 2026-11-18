@@ -5,15 +5,26 @@ Format, validate and explore JSON in the browser.
 **Use it: https://diwakersurya.github.io/json-view/**
 
 - Format with 2 spaces, 4 spaces or tabs, or minify
-- Syntax-highlighted tree you can fold, with a colour per nesting depth
-- Errors point at the line and column, with a jump to that spot in the input
-- Hover a row to see its path (`$.goldenRecord.tracks[0].title`), click the path to copy it
+- Syntax-highlighted tree you can fold, with a bracket colour per nesting depth
+- Search keys and values, with a match count and next / previous
+- Line numbers beside the input. Errors point at the line and column, mark the line, and jump to that spot
+- Hover a row for **Copy value** and **Copy path** (`$.goldenRecord.tracks[0].title`)
 - Paste with Ctrl/⌘ + V or the **Paste** button and valid JSON is formatted on arrival
-- Open or drop a `.json` file
+- Open or drop a `.json` file, copy the result or download it as `data.json`
 - Numbers stay as written (`1.0`, big integers) in browsers that expose number source text
-- Light and dark, following your system setting
+- Light, dark or your system setting, and a divider you can drag. Both choices are remembered in your browser
 
-Everything runs in the page. There are no dependencies, no build step and no network requests, so nothing you paste leaves your machine.
+| Shortcut | Does |
+|---|---|
+| Ctrl/⌘ + Enter | Format |
+| Ctrl/⌘ + K | Search the tree |
+| Enter, Shift + Enter in search | Next, previous match |
+
+Everything runs in the page. There are no dependencies and no build step, and the page only ever fetches its own files, so nothing you paste leaves your machine.
+
+## Install it, use it offline
+
+After the first visit the page keeps a copy of itself and opens without a connection. In Chrome or Edge, use **Install** in the address bar to get it as its own window; on a phone, use **Add to Home Screen**.
 
 ## Open with JSON in the URL
 
@@ -68,6 +79,8 @@ Open `index.html?test` to run the built-in self-check. The tab title reads `TEST
 
 ## Limits
 
+- Search highlights whole rows, not the matching letters, and reads the whole document on every keystroke.
+- In Chrome an error in a document under 21 characters has no line and column, because the browser does not report a position.
 - Parsing uses `JSON.parse`, so duplicate keys collapse to the last one and integer-like keys move to the front of their object.
 - Documents over 5,000 values open only their top two levels at first. "Expand all" on very large documents is slow.
 

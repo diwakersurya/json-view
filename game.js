@@ -307,6 +307,7 @@ window.jsonDungeon = (() => {
       goal = [clamp(x, 0, r.W - 1), clamp(y, 0, r.H - 1)];
     }, on);
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { C = palette(); }, on);
+    addEventListener('themechange', () => { C = palette(); }, on);   // the header's theme button
 
     const fit = () => {
       dpr = devicePixelRatio || 1; w = cv.clientWidth; h = cv.clientHeight;

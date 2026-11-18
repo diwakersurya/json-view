@@ -5,7 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>JSON View</title>
 <meta name="description" content="Format, validate and explore JSON in your browser. Nothing you paste leaves the page.">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#F3F5F9">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#131826">
+<meta property="og:type" content="website">
+<meta property="og:title" content="JSON View">
+<meta property="og:description" content="Format, validate and explore JSON in your browser. Nothing you paste leaves the page.">
+<meta property="og:url" content="https://diwakersurya.github.io/json-view/">
+<meta property="og:image" content="https://diwakersurya.github.io/json-view/card.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%232F4BD8'/><text x='8' y='12' font-size='11' font-family='monospace' font-weight='700' text-anchor='middle' fill='white'>{}</text></svg>">
+<script>
+// Apply a saved theme before the first paint. Anything but light or dark means "follow the system".
+try { const t = localStorage.theme; if (t === 'light' || t === 'dark') document.documentElement.style.colorScheme = t; } catch {}
+</script>
 <style>
 :root {
   color-scheme: light dark;
@@ -14,6 +28,7 @@
   --gutter: 1rem;
   --ui: system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --code: .8125rem/1.6 var(--mono);
 
   --paper: light-dark(#F3F5F9, #131826);
   --panel: light-dark(#FFFFFF, #1A2032);
@@ -24,31 +39,34 @@
   --accent: light-dark(#2F4BD8, #7C93FF);
   --on-accent: light-dark(#FFFFFF, #0E1320);
   --bad: light-dark(#C2261C, #FF8A80);
+  --ok: light-dark(#0A7F62, #5FD4B1);
+  --shadow: 0 .5rem 1.5rem light-dark(rgb(26 34 51 / .18), rgb(0 0 0 / .5));
 
   --key: light-dark(#1F3FBF, #8FA6FF);
   --str: light-dark(#0A7F62, #5FD4B1);
   --num: light-dark(#B25309, #F2A65A);
   --bool: light-dark(#A3247A, #F08BCB);
 
-  /* one colour per nesting depth, shared by a bracket pair and the rail between them */
+  /* one colour per nesting depth, worn by a bracket pair (and by the room walls in game mode) */
   --d0: light-dark(#4F6BED, #7C93FF);
   --d1: light-dark(#C0399B, #E67FCB);
   --d2: light-dark(#0F9D84, #4FCFB3);
   --d3: light-dark(#B98207, #E8B64C);
 }
 * { box-sizing: border-box }
+[hidden] { display: none !important }
 body {
   margin: 0; height: 100dvh;
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto;
   background: var(--paper); color: var(--ink);
   font: .875rem/1.4 var(--ui);
 }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--s1) var(--s4); padding: var(--s3) var(--s4) }
+header { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s1) var(--s4); padding: var(--s2) var(--s4) }
 h1 { margin: 0; font: 600 1rem var(--mono) }
 header p { margin: 0; color: var(--muted) }
-header nav { margin-left: auto; display: flex; gap: var(--s4) }
-header a { color: var(--muted) }
-#play { color: var(--accent); font-weight: 600 }
+header nav { margin-left: auto; display: flex; gap: var(--s2) }
+header .btn, header button { border-color: transparent; color: var(--muted) }
+header .btn:hover, header button:hover { color: var(--ink) }
 
 /* Game mode (?mode=game): the canvas takes the place of both panes. */
 #game { display: none; width: 100%; height: 100%; min-height: 0; outline: none; touch-action: none }
@@ -57,83 +75,134 @@ body.game main, body.game footer { display: none }
 body.game #game { display: block }
 
 main {
-  display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+  display: grid; grid-template-columns: minmax(0, var(--split, 50%)) auto minmax(0, 1fr);
   min-height: 0; border-block: 1px solid var(--line); background: var(--panel);
 }
-.pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0 }
-.pane + .pane { border-left: 1px solid var(--line) }
+.pane { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; min-height: 0; container-type: inline-size }
+/* A narrow pane keeps its toolbar on one row: secondary buttons drop to their icon, then the title goes. */
+@container (max-width: 36rem) { .bar > button > span { display: none } .bar > button:has(> span) { padding: var(--s1) } }
+@container (max-width: 26rem) { .bar > h2, .bar > .sep { display: none } }
+/* The divider is one pixel wide to look at and nine to grab. */
+#split {
+  width: 9px; margin-inline: -4px; z-index: 1; cursor: col-resize; touch-action: none;
+  background: linear-gradient(var(--line), var(--line)) center / 1px 100% no-repeat;
+}
+#split:hover, #split:focus-visible { background: linear-gradient(var(--accent), var(--accent)) center / 3px 100% no-repeat; outline: none }
 .bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding: var(--s2) var(--s3); border-bottom: 1px solid var(--line) }
+h2 { margin: 0 var(--s1) 0 0; font: 600 .8125rem var(--ui); color: var(--muted) }
+.sep { align-self: stretch; width: 1px; margin-block: var(--s1); background: var(--line) }
 .push { margin-left: auto }
 
-button, select {
+button, select, .btn {
   font: inherit; color: inherit; background: transparent;
   border: 1px solid var(--line); border-radius: var(--radius);
-  padding: var(--s1) var(--s3); cursor: pointer;
+  padding: var(--s1) .625rem; cursor: pointer;
 }
-button:hover:not(:disabled) { background: var(--hover) }
-button:disabled { opacity: .5; cursor: not-allowed }
+button, .btn { display: inline-flex; align-items: center; gap: .375rem; white-space: nowrap; text-decoration: none }
+button:hover:not(:disabled), .btn:hover { background: var(--hover) }
+button:disabled, input:disabled { opacity: .5; cursor: not-allowed }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent) }
 button.primary:hover:not(:disabled) { background: var(--accent); filter: brightness(1.1) }
-button.done::after { content: " ✓" }
+button.done::after { content: "✓" }
+.sq { padding: var(--s1) }
+.i { flex: none; width: 1rem; height: 1rem; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px }
 
+.menu { position: relative }
+.menu > summary { list-style: none }
+.menu > summary::-webkit-details-marker { display: none }
+.menu > div {
+  position: absolute; right: 0; top: calc(100% + var(--s1)); z-index: 2;
+  display: grid; min-width: 9rem; padding: var(--s1);
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.menu > div button { border: 0 }
+
+.editor { display: grid; grid-template: minmax(0, 1fr) / auto minmax(0, 1fr); min-height: 0; overflow: hidden }
+/* Line numbers. The extra bottom padding keeps it scrollable as far as the input beside it. */
+#gutter {
+  position: relative; overflow: hidden; min-width: 2.75rem; padding: var(--s4) var(--s2) 3rem var(--s3);
+  color: var(--muted); font: var(--code); text-align: right; user-select: none;
+}
+#lines { position: relative; margin: 0; font: inherit }
+#errline { position: absolute; inset-inline: 0; height: 1.6em; background: color-mix(in srgb, var(--bad) 22%, transparent); border-left: 2px solid var(--bad) }
 textarea {
   width: 100%; height: 100%; resize: none; border: 0; outline-offset: -2px;
-  padding: var(--s4); background: transparent; color: inherit;
-  font: .8125rem/1.6 var(--mono); tab-size: 4;
+  padding: var(--s4) var(--s4) var(--s4) var(--s2); background: transparent; color: inherit;
+  font: var(--code); tab-size: 4;
 }
+
+.search {
+  flex: 1 1 9rem; display: flex; align-items: center; gap: var(--s1); min-width: 9rem; padding-left: var(--s2);
+  border: 1px solid var(--line); border-radius: var(--radius); color: var(--muted);
+}
+.search:focus-within { outline: 2px solid var(--accent); outline-offset: 1px }
+.search input { flex: 1; min-width: 0; padding: var(--s1) 0; border: 0; outline: 0; background: transparent; color: var(--ink); font: inherit }
+.search button { border: 0; padding: var(--s1) }
+#q-count { font-size: .75rem; white-space: nowrap }
+
 #tree {
   --c: var(--muted);
   overflow: auto; padding: var(--s4) var(--s3);
-  font: .8125rem/1.6 var(--mono); white-space: pre-wrap; overflow-wrap: anywhere;
+  font: var(--code); white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.row, summary, .end { padding-left: var(--gutter); border-radius: var(--s1) }
-.row:hover, summary:hover, .end:hover { background: var(--hover) }
-summary { list-style: none; cursor: pointer; position: relative }
-summary::-webkit-details-marker { display: none }
-summary::before {
+.row, #tree summary, .end { position: relative; padding-left: var(--gutter); border-radius: var(--s1) }
+.row:hover, #tree summary:hover, .end:hover { background: var(--hover) }
+#tree summary { list-style: none; cursor: pointer }
+#tree summary::-webkit-details-marker { display: none }
+#tree summary::before {
   content: ""; position: absolute; left: .2rem; top: .5em;
   border: .3em solid transparent; border-right-width: 0; border-left-color: var(--muted);
   transition: rotate .12s;
 }
-details[open] > summary::before { rotate: 90deg }
-details[open] > summary > .fold { display: none }
-.kids { margin-left: .35rem; padding-left: .65rem; border-left: 1px solid color-mix(in srgb, var(--c) 45%, transparent) }
+#tree details[open] > summary::before { rotate: 90deg }
+#tree details[open] > summary > .fold { display: none }
+.kids { margin-left: .35rem; padding-left: .65rem; border-left: 1px solid var(--line) }
 .c0 { --c: var(--d0) } .c1 { --c: var(--d1) } .c2 { --c: var(--d2) } .c3 { --c: var(--d3) }
 .br { color: var(--c); font-weight: 600 }
 .count { color: var(--muted); font-style: italic }
 .key { color: var(--key) } .str { color: var(--str) } .num { color: var(--num) } .bool { color: var(--bool) } .nul { color: var(--muted) }
 #tree a { color: inherit; text-underline-offset: .2em }
+/* Search: every match is tinted, the one you are on is outlined. */
+#tree .hit { background: color-mix(in srgb, var(--num) 18%, transparent) }
+#tree .cur { outline: 2px solid var(--num); outline-offset: -2px }
+#rowact { position: absolute; right: var(--s1); top: 1px; display: flex; gap: var(--s1); font-family: var(--ui) }
+#rowact button { padding: 0 var(--s2); font-size: .6875rem; line-height: 1.55; background: var(--panel) }
+#rowact button:hover { background: var(--hover) }
 
 .note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); padding-left: var(--gutter); color: var(--muted); font-family: var(--ui); font-size: .875rem }
 .note.bad { color: var(--bad) }
-.note svg { flex: none; width: 1rem; height: 1rem }
 .note button { color: var(--ink) }
 
 #toast {
-  position: fixed; left: 50%; bottom: 3rem; z-index: 1; translate: -50% var(--s2);
+  position: fixed; left: 50%; bottom: 3rem; z-index: 3; translate: -50% var(--s2);
   display: flex; align-items: center; gap: var(--s2);
   width: max-content; max-width: min(36rem, calc(100vw - 2rem));
   padding: var(--s2) var(--s2) var(--s2) var(--s3);
-  background: var(--panel); border: 1px solid var(--bad); border-radius: var(--radius);
-  box-shadow: 0 .5rem 1.5rem light-dark(rgb(26 34 51 / .18), rgb(0 0 0 / .5));
+  background: var(--panel); border: 1px solid var(--bad); border-radius: var(--radius); box-shadow: var(--shadow);
   opacity: 0; visibility: hidden; transition: opacity .2s, translate .2s, visibility .2s;
 }
 #toast.show { opacity: 1; visibility: visible; translate: -50% 0 }
-#toast svg { flex: none; width: 1rem; height: 1rem; color: var(--bad) }
-#toast button { border-color: transparent; padding: 0 var(--s2); color: var(--muted) }
+#toast > .i { color: var(--bad) }
+#toast button { border-color: transparent; padding: var(--s1); color: var(--muted) }
 
-footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem; padding: var(--s1) var(--s4); color: var(--muted); font-size: .8125rem }
-#path { margin-left: auto; max-width: 60%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-color: transparent; font-family: var(--mono); color: var(--ink) }
+footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem; padding: var(--s1) var(--s4); color: var(--muted); font-size: .8125rem; white-space: nowrap }
+#status { display: inline-flex; align-items: center; gap: var(--s1); padding: .0625rem var(--s2); border-radius: 1rem; font-weight: 600 }
+#status:empty { display: none }
+#status.ok { color: var(--ok); background: color-mix(in srgb, var(--ok) 14%, transparent) }
+#status.bad { color: var(--bad); background: color-mix(in srgb, var(--bad) 14%, transparent) }
+#path { display: block; margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; border-color: transparent; font-family: var(--mono); color: var(--ink) }
 
 @media (max-width: 45rem) {
   body { height: auto; min-height: 100dvh }
   main { grid-template-columns: minmax(0, 1fr) }
-  .pane + .pane { border-left: 0; border-top: 1px solid var(--line) }
-  textarea { height: 40dvh }
+  #split { display: none }
+  .pane:last-child { border-top: 1px solid var(--line) }
+  .editor { height: 40dvh }
   #tree { min-height: 40dvh }
+  #cursor { display: none }
 }
-@media (prefers-reduced-motion: reduce) { summary::before, #toast { transition: none } }
+@media (prefers-reduced-motion: reduce) { #tree summary::before, #toast { transition: none } }
 </style>
 </head>
 <body>
@@ -141,35 +210,57 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
   <h1><span class="br c0">{</span><span class="key">"json"</span>: <span class="str">"view"</span><span class="br c0">}</span></h1>
   <p>Runs in your browser. Nothing you paste is sent anywhere.</p>
   <nav>
-    <a id="play" href="?mode=game">Play</a>
-    <a href="https://github.com/diwakersurya/json-view">Source</a>
+    <a id="play" class="btn" href="?mode=game" data-i="play"><span>Play</span></a>
+    <a class="btn" href="https://github.com/diwakersurya/json-view" data-i="code">Source</a>
+    <button id="theme" class="sq"></button>
   </nav>
 </header>
 
 <main>
   <section class="pane">
     <div class="bar">
-      <button id="format" class="primary" data-valid="Format (Ctrl or ⌘ + Enter)">Format</button>
-      <button id="minify" data-valid="">Minify</button>
+      <h2>Input</h2>
+      <button id="format" class="primary" data-i="format" data-valid="Format (Ctrl or ⌘ + Enter)">Format</button>
+      <button id="minify" data-i="minify" aria-label="Minify" data-valid="Minify to one line"><span>Minify</span></button>
       <select id="indent" aria-label="Indent" title="Indent">
         <option value="2">2 spaces</option>
         <option value="4">4 spaces</option>
         <option value="tab">Tab</option>
       </select>
-      <button id="paste" class="push" title="Replace the input with the clipboard">Paste</button>
-      <button id="open" title="Open a JSON file">Open</button>
+      <span class="sep"></span>
+      <button id="paste" data-i="paste" aria-label="Paste" title="Paste: replace the input with the clipboard"><span>Paste</span></button>
+      <button id="open" data-i="open" aria-label="Open" title="Open a JSON file"><span>Open</span></button>
       <input id="file" type="file" accept=".json,application/json,text/plain" hidden>
-      <button id="sample">Sample</button>
-      <button id="clear">Clear</button>
+      <details id="more" class="menu push">
+        <summary class="btn sq" data-i="more" aria-label="More actions" title="More actions"></summary>
+        <div>
+          <button id="sample">Load the sample</button>
+          <button id="clear">Clear the input</button>
+        </div>
+      </details>
     </div>
-    <textarea id="input" aria-label="JSON input" placeholder="Paste JSON here" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+    <div class="editor">
+      <div id="gutter" aria-hidden="true"><div id="errline" hidden></div><pre id="lines">1</pre></div>
+      <textarea id="input" aria-label="JSON input" placeholder="Paste JSON here" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off"></textarea>
+    </div>
   </section>
+
+  <div id="split" role="separator" aria-orientation="vertical" aria-label="Resize the panes" aria-valuemin="20" aria-valuemax="80" tabindex="0" title="Drag to resize. Double-click to reset."></div>
 
   <section class="pane">
     <div class="bar">
-      <button id="expand" data-valid="">Expand all</button>
-      <button id="collapse" data-valid="">Collapse all</button>
-      <button id="copy" class="push" data-valid="Copy the formatted JSON">Copy JSON</button>
+      <h2>Tree</h2>
+      <div class="search" data-i="search">
+        <input id="q" type="search" placeholder="Search keys and values" aria-label="Search keys and values" autocomplete="off" spellcheck="false" data-valid="Search keys and values (Ctrl or ⌘ + K)">
+        <span id="q-count" aria-live="polite"></span>
+        <button id="q-prev" class="sq" data-i="up" aria-label="Previous match" title="Previous match (Shift + Enter)" disabled></button>
+        <button id="q-next" class="sq" data-i="down" aria-label="Next match" title="Next match (Enter)" disabled></button>
+      </div>
+      <button id="expand" class="sq" data-i="expand" aria-label="Expand all" data-valid="Expand all"></button>
+      <button id="collapse" class="sq" data-i="collapse" aria-label="Collapse all" data-valid="Collapse all"></button>
+      <span class="sep"></span>
+      <button id="copy" data-i="copy" aria-label="Copy" data-valid="Copy the formatted JSON"><span>Copy</span></button>
+      <button id="download" data-i="download" aria-label="Download" data-valid="Download the formatted JSON as data.json"><span>Download</span></button>
     </div>
     <div id="tree"></div>
   </section>
@@ -179,14 +270,46 @@ footer { display: flex; align-items: center; gap: var(--s4); min-height: 2.25rem
 
 <footer>
   <span id="status" aria-live="polite"></span>
+  <span id="stats"></span>
+  <span id="cursor"></span>
   <button id="path" title="Copy path" hidden></button>
 </footer>
 
-<div id="toast" role="alert"><span id="toast-text"></span><button id="toast-close" aria-label="Dismiss">✕</button></div>
+<div id="toast" role="alert"><span id="toast-text"></span><button id="toast-close" data-i="close" aria-label="Dismiss"></button></div>
 
 <script>
 const $ = id => document.getElementById(id);
 const input = $('input'), tree = $('tree'), statusEl = $('status'), pathBtn = $('path');
+
+// Icons are 16 x 16 stroked paths, drawn into anything carrying data-i.
+const ICON = {
+  format: 'M2.5 4h9M5.5 8h8M2.5 12h9',
+  minify: 'M2 8h4.5M4.5 6l2 2-2 2M14 8H9.5M11.5 6l-2 2 2 2',
+  paste: 'M5.5 3.5h-2v10h9v-10h-2M5.5 2.5h5v2h-5z',
+  open: 'M2 4.5h4L7.5 6H14v7H2z',
+  more: 'M3 8h.5M7.75 8h.5M12.5 8h.5',
+  search: 'M7 2.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9zM10.5 10.5l3 3',
+  up: 'M4 10l4-4 4 4',
+  down: 'M4 6l4 4 4-4',
+  expand: 'M5 6l3-3 3 3M5 10l3 3 3-3',
+  collapse: 'M5 3l3 3 3-3M5 13l3-3 3 3',
+  copy: 'M5.5 5.5h8v8h-8zM10.5 5.5v-3h-8v8h3',
+  download: 'M8 2.5v8M4.5 7.5L8 11l3.5-3.5M2.5 13.5h11',
+  close: 'M4 4l8 8M12 4l-8 8',
+  check: 'M3 8.5l3.5 3.5L13 4.5',
+  alert: 'M8 1.5a6.5 6.5 0 100 13 6.5 6.5 0 000-13zM8 4.5v4M8 11.2v.1',
+  play: 'M5 3.5v9L12.5 8z',
+  code: 'M5.5 4.5L2 8l3.5 3.5M10.5 4.5L14 8l-3.5 3.5',
+  system: 'M2 3h12v8H2zM6 13.5h4M8 11v2.5',
+  light: 'M8 5.5a2.5 2.5 0 100 5 2.5 2.5 0 000-5zM8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1',
+  dark: 'M13 9.5A5.5 5.5 0 016.5 3 5.5 5.5 0 1013 9.5z',
+};
+const icon = name => `<svg class="i" viewBox="0 0 16 16" aria-hidden="true"><path d="${ICON[name]}"/></svg>`;
+for (const e of document.querySelectorAll('[data-i]')) e.insertAdjacentHTML('afterbegin', icon(e.dataset.i));
+
+// Preferences live in this browser only. Storage can be blocked, so both ways are guarded.
+const stored = k => { try { return localStorage[k]; } catch {} };
+const store = (k, v) => { try { localStorage[k] = v; } catch {} };
 
 const SAMPLE = `{
   "mission": "Voyager 1",
@@ -227,17 +350,28 @@ const parse = text => JSON.parse(text, keepRaw
 const stringify = (v, indent) => JSON.stringify(v, (k, x) => x instanceof Num ? JSON.rawJSON(x.src) : x, indent);
 const isBox = v => v !== null && typeof v === 'object' && !(v instanceof Num);
 
-// Browsers word JSON errors differently: "position 42", "line 3 column 5", or no location at all.
+const SNIPPET = /, (\.{3})?"([\s\S]*)"(\.{3})? is not valid JSON$/;
+// Browsers word JSON errors differently: "position 42", "line 3 column 5", a quoted piece of
+// the text around the bad token, "unexpected end", or no location at all.
 function errorPos(msg, text) {
   let m = /position (\d+)/.exec(msg), offset;
   if (m) offset = +m[1];
   else if ((m = /line (\d+) column (\d+)/.exec(msg)))
     offset = text.split('\n').slice(0, m[1] - 1).join('\n').length + (m[1] > 1) + (m[2] - 1);
+  else if ((m = SNIPPET.exec(msg)) && (m[1] || m[3])) {
+    // Chrome quotes the 10 characters either side of the token; "..." marks a side that was cut.
+    // ponytail: takes the first place that text occurs, which is wrong if the same 20
+    // characters also appear earlier (say, inside a string). Write a tokenizer to be exact.
+    const at = text.indexOf(m[2]);
+    if (at < 0) return null;
+    offset = m[1] && m[3] ? at + 10 : m[1] ? text.length - m[2].length + 10 : m[2].length - 10;
+  }
+  else if (/Unexpected end of JSON input|Unexpected EOF/.test(msg)) offset = text.trimEnd().length;
   else return null;
   const before = text.slice(0, offset).split('\n');
   return { offset, line: before.length, col: before.at(-1).length + 1 };
 }
-const cleanError = msg => msg.replace(/^JSON\.parse: |^JSON Parse error: | in JSON at position.*$| at line \d+ column \d+ of the JSON data$/g, '');
+const cleanError = msg => msg.replace(SNIPPET, '').replace(/^JSON\.parse: |^JSON Parse error: | in JSON at position.*$| at line \d+ column \d+ of the JSON data$/g, '');
 
 const pathStr = parts => '$' + parts.map(k =>
   typeof k === 'number' ? `[${k}]` : /^[A-Za-z_$][\w$]*$/.test(k) ? '.' + k : `[${JSON.stringify(k)}]`).join('');
@@ -277,6 +411,11 @@ function leaf(v) {
 
 let value, valid = false, eager = true, timer = 0;
 
+// Search. `q` is the lower-cased query; a row matches on its key or on its own (non-container) value.
+let q = '', hits = [], cur = -1;
+const leafText = v => v instanceof Num ? v.src : String(v);
+const isHit = (k, v) => !!q && ((typeof k === 'string' && k.toLowerCase().includes(q)) || (!isBox(v) && leafText(v).toLowerCase().includes(q)));
+
 // One node of the tree. Objects and arrays are <details>; their children are built on first open.
 function node(k, v, depth, last) {
   const arr = Array.isArray(v);
@@ -284,10 +423,11 @@ function node(k, v, depth, last) {
   const [open, close] = arr ? '[]' : '{}';
   const comma = last ? '' : ',';
   const head = el(n ? 'summary' : 'div', n ? '' : 'row');
+  if (isHit(k, v)) head.classList.add('hit');
   if (typeof k === 'string') head.append(el('span', 'key', JSON.stringify(k)), ': ');
   if (!n) {
     head.append(isBox(v) ? el('span', 'br', open + close) : leaf(v), comma);
-    head.k = k;
+    Object.assign(head, { k, v });
     return head;
   }
   const d = el('details', 'c' + depth % 4), fold = el('span', 'fold'), end = el('div', 'end');
@@ -308,53 +448,87 @@ function fill(d) {
   d.children[1].append(frag);
 }
 
-const ALERT = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="8" r="6.5"/><path d="M8 4.5v4M8 11.2v.1"/></svg>';
+// Line numbers beside the input, rebuilt only when the number of lines changes.
+const gutter = $('gutter'), errline = $('errline');
+let lineCount = 1;
+function syncLines() {
+  let n = 1;
+  for (let i = -1; (i = input.value.indexOf('\n', i + 1)) >= 0;) n++;
+  if (n !== lineCount) $('lines').textContent = Array.from({ length: lineCount = n }, (_, i) => i + 1).join('\n');
+  gutter.scrollTop = input.scrollTop;
+}
+input.addEventListener('scroll', () => { gutter.scrollTop = input.scrollTop; });
+
+// ponytail: reads the text up to the caret on every move, fine up to a few MB of input.
+function showCursor() {
+  const before = input.value.slice(0, input.selectionStart).split('\n');
+  $('cursor').textContent = `Ln ${before.length}, Col ${before.at(-1).length + 1}`;
+}
+for (const type of ['keyup', 'click', 'focus']) input.addEventListener(type, showCursor);
+
+function setStatus(kind, text) {
+  statusEl.className = kind;
+  statusEl.innerHTML = kind ? icon(kind === 'ok' ? 'check' : 'alert') : '';
+  if (kind) statusEl.append(text);
+}
 
 function update() {
   const text = input.value;
   tree.replaceChildren();
-  pathBtn.hidden = true;
+  pathBtn.hidden = errline.hidden = true;
   valid = false;
-  statusEl.textContent = '';
+  setStatus('');
+  syncLines();
+  showCursor();
+  const bulk = `${lineCount.toLocaleString()} ${lineCount === 1 ? 'line' : 'lines'}, ${size(text)}`;
+  $('stats').textContent = text ? bulk : '';
   if (!text.trim()) {
     tree.append(el('div', 'note', 'Paste JSON on the left, or drop a file anywhere on this page.'));
   } else {
     try { value = parse(text); valid = true; }
     catch (e) {
       const pos = errorPos(e.message, text), box = el('div', 'note bad');
-      box.innerHTML = ALERT;
+      box.innerHTML = icon('alert');
       box.append(el('span', '', (pos ? `Line ${pos.line}, column ${pos.col}: ` : '') + cleanError(e.message)));
       if (pos) {
+        errline.style.top = `calc(var(--s4) + ${pos.line - 1} * 1.6em)`;
+        errline.hidden = false;
         const show = el('button', '', 'Show in input');
         show.onclick = () => {
           input.focus();
           input.setSelectionRange(pos.offset, pos.offset + 1);
           input.scrollTop = Math.max(0, (pos.line - 1) * parseFloat(getComputedStyle(input).lineHeight) - input.clientHeight / 2);
+          showCursor();
         };
         box.append(show);
       }
       tree.append(box);
-      statusEl.textContent = 'Invalid JSON.';
+      setStatus('bad', 'Invalid JSON');
     }
   }
   if (valid) {
     const n = count(value);
     // ponytail: past 5,000 values only the top two levels start open, the rest build on demand.
     eager = n <= 5000;
+    q = $('q').value.trim().toLowerCase();
     tree.append(node(undefined, value, 0, true));
-    statusEl.textContent = `Valid JSON. ${n.toLocaleString()} ${n === 1 ? 'value' : 'values'}, ${size(text)}.`;
+    setStatus('ok', 'Valid JSON');
+    $('stats').textContent = `${n.toLocaleString()} ${n === 1 ? 'value' : 'values'}, ${bulk}`;
   }
   for (const b of document.querySelectorAll('[data-valid]')) {
     b.disabled = !valid;
     b.title = valid ? b.dataset.valid : 'Needs valid JSON';
   }
+  search(false);
 }
 
-const load = text => { input.value = text; update(); };
+// Text put in by the page starts with the caret at the top, not after the last character.
+const setText = text => { input.value = text; input.setSelectionRange(0, 0); };
+const load = text => { setText(text); update(); };
 // Pasted JSON (Ctrl/⌘ + V, the Paste button, a link) is formatted on arrival. Anything
 // that is not valid JSON is left exactly as it came, so the error points at the real text.
 function formatIfValid() {
-  try { input.value = stringify(parse(input.value), indent()); } catch {}
+  try { setText(stringify(parse(input.value), indent())); } catch {}
   update();
   if (valid) toastEl.classList.remove('show');   // a good paste answers whatever the toast was asking for
   return valid;
@@ -363,7 +537,7 @@ const loadFormatted = text => { input.value = text; return formatIfValid(); };
 
 const toastEl = $('toast');
 let toastTimer;
-toastEl.insertAdjacentHTML('afterbegin', ALERT);
+toastEl.insertAdjacentHTML('afterbegin', icon('alert'));
 function toast(msg) {
   $('toast-text').textContent = msg;
   toastEl.classList.add('show');
@@ -381,21 +555,41 @@ const copy = (text, btn) => navigator.clipboard.writeText(text).then(
 input.addEventListener('input', e => {
   clearTimeout(timer);
   if (e.inputType === 'insertFromPaste') { timer = 0; return formatIfValid(); }
+  syncLines();
+  showCursor();
   timer = setTimeout(() => { timer = 0; update(); }, 150);
 });
-input.addEventListener('keydown', e => { if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') $('format').click(); });
 
 $('format').onclick = () => fresh() && load(stringify(value, indent()));
 $('minify').onclick = () => fresh() && load(stringify(value));
 $('indent').onchange = () => fresh() && load(stringify(value, indent()));
 $('copy').onclick = e => fresh() && copy(stringify(value, indent()), e.currentTarget);
+$('download').onclick = () => {
+  if (!fresh()) return;
+  const a = el('a');
+  a.href = URL.createObjectURL(new Blob([stringify(value, indent())], { type: 'application/json' }));
+  a.download = 'data.json';
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+};
 $('paste').onclick = () => (navigator.clipboard?.readText ? navigator.clipboard.readText() : Promise.reject()).then(
   text => text.trim() ? loadFormatted(text) : toast('The clipboard has no text to paste.'),
   () => toast('The browser blocked clipboard access. Click the input and press Ctrl or ⌘ + V.'));
-$('sample').onclick = () => load(SAMPLE);
+$('sample').onclick = () => loadFormatted(SAMPLE);
 $('clear').onclick = () => { load(''); input.focus(); };
 $('open').onclick = () => $('file').click();
 $('file').onchange = e => { e.target.files[0]?.text().then(load); e.target.value = ''; };
+
+// The "more" menu closes on any click that is not its own button, and on Escape.
+const more = $('more');
+addEventListener('click', e => { if (!e.target.closest?.('#more > summary')) more.open = false; });
+
+addEventListener('keydown', e => {
+  if (e.key === 'Escape') more.open = false;
+  if (!(e.metaKey || e.ctrlKey) || isGame()) return;
+  if (e.key === 'Enter') $('format').click();
+  else if (e.key.toLowerCase() === 'k') { e.preventDefault(); $('q').focus(); $('q').select(); }
+});
 
 addEventListener('dragover', e => { if (e.dataTransfer.types.includes('Files')) e.preventDefault(); });
 addEventListener('drop', e => {
@@ -412,18 +606,111 @@ $('expand').onclick = () => {
 };
 $('collapse').onclick = () => tree.querySelectorAll('details details[open]').forEach(d => { d.open = false; });
 
+// Every match in the document, in reading order, as paths. Rows build lazily, so this
+// walks the data, not the page.
+function findHits(v, path, out) {
+  if (!isBox(v)) return;
+  for (const [k, x] of Array.isArray(v) ? v.entries() : Object.entries(v)) {
+    path.push(k);
+    if (isHit(k, x)) out.push([...path]);
+    findHits(x, path, out);
+    path.pop();
+  }
+}
+const showCount = () => { $('q-count').textContent = !q ? '' : !hits.length ? 'No matches' : cur < 0 ? `${hits.length.toLocaleString()} found` : `${cur + 1} of ${hits.length.toLocaleString()}`; };
+// ponytail: walks the whole document and repaints every built row on each keystroke.
+// Debounce it, or index the text once, if documents of several MB feel slow.
+function search(jump) {
+  q = valid ? $('q').value.trim().toLowerCase() : '';
+  hits = []; cur = -1;
+  if (q) { if (isHit(undefined, value)) hits.push([]); findHits(value, [], hits); }
+  for (const h of tree.querySelectorAll('.row, summary')) {
+    const owner = h.matches('.row') ? h : h.parentElement;
+    h.classList.toggle('hit', isHit(owner.k, owner.v));
+    h.classList.remove('cur');
+  }
+  $('q-prev').disabled = $('q-next').disabled = !hits.length;
+  if (jump && hits.length) go(0); else showCount();
+}
+// Open the way down to match i, then bring its row into view.
+function go(i) {
+  cur = (i + hits.length) % hits.length;
+  let n = tree.firstElementChild;
+  for (const k of hits[cur]) {
+    n.open = true; fill(n);
+    n = n.children[1].children[Array.isArray(n.v) ? k : Object.keys(n.v).indexOf(k)];
+  }
+  tree.querySelector('.cur')?.classList.remove('cur');
+  const row = n.matches('details') ? n.firstElementChild : n;
+  row.classList.add('cur');
+  row.scrollIntoView({ block: 'center' });
+  showCount();
+}
+const step = d => hits.length && go(cur < 0 ? 0 : cur + d);
+$('q').oninput = () => search(true);
+$('q').onkeydown = e => { if (e.key === 'Enter') { e.preventDefault(); step(e.shiftKey ? -1 : 1); } };
+$('q-prev').onclick = () => step(-1);
+$('q-next').onclick = () => step(1);
+
+// Hovering a row shows its path in the footer and puts two copy buttons on the row itself.
+const rowact = el('span');
+rowact.id = 'rowact';
+rowact.innerHTML = '<button data-c="v" title="Copy this value">Copy value</button><button data-c="p" title="Copy the path to this value">Copy path</button>';
+rowact.onclick = e => {
+  e.preventDefault();          // the row may be a <summary>; do not fold it
+  const b = e.target.closest('button'), v = rowact.v;
+  if (b) copy(b.dataset.c === 'p' ? pathStr(rowact.parts) : typeof v === 'string' ? v : stringify(v, indent()), b);
+};
 function showPath(e) {
   const n = e.target.closest('.row, summary, .end');
   if (!n) return;
-  const parts = [];
-  for (let x = n.matches('.row') ? n : n.parentElement; x; x = x.parentElement.closest('details'))
+  const owner = n.matches('.row') ? n : n.parentElement, parts = [];
+  for (let x = owner; x; x = x.parentElement.closest('details'))
     if (x.k !== undefined) parts.unshift(x.k);
   pathBtn.textContent = pathStr(parts);
   pathBtn.hidden = false;
+  if (n.matches('.end')) return rowact.remove();
+  Object.assign(rowact, { parts, v: owner.v });
+  if (rowact.parentElement !== n) n.append(rowact);
 }
 tree.addEventListener('mouseover', showPath);
 tree.addEventListener('focusin', showPath);
+tree.addEventListener('mouseleave', () => rowact.remove());
 pathBtn.onclick = () => copy(pathBtn.textContent, pathBtn);
+
+// The divider between the panes. Its position is a percentage, kept between 20 and 80.
+const split = $('split'), mainEl = document.querySelector('main');
+let splitPct = 50;
+function setSplit(pct, save) {
+  splitPct = Math.min(80, Math.max(20, pct));
+  mainEl.style.setProperty('--split', splitPct + '%');
+  split.setAttribute('aria-valuenow', Math.round(splitPct));
+  if (save) store('split', splitPct);
+}
+split.onpointerdown = e => { split.setPointerCapture(e.pointerId); e.preventDefault(); };
+split.onpointermove = e => {
+  if (!split.hasPointerCapture(e.pointerId)) return;
+  const r = mainEl.getBoundingClientRect();
+  setSplit((e.clientX - r.left) / r.width * 100);
+};
+split.onpointerup = () => store('split', splitPct);
+split.ondblclick = () => setSplit(50, true);
+split.onkeydown = e => { const d = { ArrowLeft: -2, ArrowRight: 2 }[e.key]; if (d) { e.preventDefault(); setSplit(splitPct + d, true); } };
+setSplit(parseFloat(stored('split')) || 50);
+
+// Theme: follow the system, or force light or dark. The button steps through the three.
+const THEMES = ['system', 'light', 'dark'], themeBtn = $('theme');
+function setTheme(t, save) {
+  if (!THEMES.includes(t)) t = 'system';
+  document.documentElement.style.colorScheme = t === 'system' ? '' : t;
+  themeBtn.dataset.theme = t;
+  themeBtn.innerHTML = icon(t);
+  themeBtn.title = `Theme: ${t}. Click for ${THEMES[(THEMES.indexOf(t) + 1) % 3]}.`;
+  themeBtn.setAttribute('aria-label', themeBtn.title);
+  if (save) { store('theme', t); dispatchEvent(new Event('themechange')); }   // the game repaints on this
+}
+themeBtn.onclick = () => setTheme(THEMES[(THEMES.indexOf(themeBtn.dataset.theme) + 1) % 3], true);
+setTheme(stored('theme'));
 
 // JSON can be handed over in the URL fragment: #<percent-encoded JSON>. A fragment is never
 // sent to the server, so this keeps the "nothing leaves your browser" promise.
@@ -442,7 +729,7 @@ function loadHash() {
   }
   return true;
 }
-if (!loadHash()) load(SAMPLE);
+if (!loadHash()) loadFormatted(SAMPLE);
 
 // Game mode. game.js is fetched only when asked for, so the viewer itself stays one file.
 const playLink = $('play');
@@ -455,7 +742,7 @@ const loadGame = () => gameScript ??= new Promise((ok, fail) => {
 function syncMode() {
   const game = isGame();
   document.body.classList.toggle('game', game);
-  playLink.textContent = game ? 'Exit game' : 'Play';
+  playLink.lastElementChild.textContent = game ? 'Exit game' : 'Play';
   playLink.href = game ? location.pathname : '?mode=game';
   if (!game) return window.jsonDungeon?.stop();
   loadGame().then(
@@ -478,20 +765,38 @@ addEventListener('popstate', syncMode);
 addEventListener('hashchange', () => { if (loadHash()) syncMode(); });
 syncMode();
 
+// Offline copy of the page's own files, so it opens without a connection. Not on file://.
+if (location.protocol !== 'file:') navigator.serviceWorker?.register('sw.js').catch(() => {});
+
 // Self-check: open index.html?test and read the tab title.
 if (location.search === '?test') {
   const broken = '{\n"a":}';
+  const long = '{\n  "a": 1,\n  "b": 2,\n  "c": ,\n  "d": 4,\n  "e": 5\n}';   // the stray comma is character 29
+  const early = '{"a": ,"b":1,"c":2,"d":3}';                                  // and here character 6
+  const find = text => { $('q').value = text; search(true); return hits; };
   const checks = {
     path: pathStr(['a', 0, 'b c']) === '$.a[0]["b c"]',
     position: JSON.stringify(errorPos('Unexpected token in JSON at position 6', broken)) === '{"offset":6,"line":2,"col":5}',
     lineColumn: errorPos('JSON.parse: unexpected character at line 2 column 5 of the JSON data', broken).offset === 6,
     noLocation: errorPos('JSON Parse error: Unexpected identifier', broken) === null,
+    snippetMiddle: errorPos(`Unexpected token ',', ..."${long.slice(19, 39)}"... is not valid JSON`, long)?.offset === 29,
+    snippetEnd: errorPos(`Unexpected token ',', ..."${long.slice(19)}" is not valid JSON`, long)?.offset === 29,
+    snippetStart: errorPos(`Unexpected token ',', "${early.slice(0, 16)}"... is not valid JSON`, early)?.offset === 6,
+    snippetShort: errorPos(`Unexpected token '}', "{"a":}" is not valid JSON`, '{"a":}') === null,
+    endOfInput: errorPos('Unexpected end of JSON input', '{"a":\n')?.offset === 5,
+    // Whatever this browser says about a real error, it must be located and fit on one line.
+    realError: [[long, 29], [early, 6]].every(([text, at]) => { try { parse(text); } catch (e) { return errorPos(e.message, text)?.offset === at && !cleanError(e.message).includes('\n'); } }),
     roundTrip: stringify(parse('{"a":[1,{"b":null}],"c":"x"}')) === '{"a":[1,{"b":null}],"c":"x"}',
     exactNumbers: !keepRaw || stringify(parse('[1.0,9007199254740993]')) === '[1.0,9007199254740993]',
     count: count(parse('{"a":[1,2],"b":{}}')) === 5,
     hashEncoded: decodeHash('%7B%22a%22%3A%20%22x%20y%22%7D') === '{"a": "x y"}',
     hashRaw: decodeHash('{"a":"50%"}') === '{"a":"50%"}',
+    sampleFormatted: input.value === stringify(parse(SAMPLE), 2) && $('lines').textContent.endsWith('\n' + input.value.split('\n').length),
     treeText: tree.textContent.includes('"Voyager 1"') && tree.querySelectorAll('details').length === 7,
+    searchFinds: find('VOYAGER').map(pathStr).join() === '$.mission,$.more' && tree.querySelector('.cur').textContent.includes('"mission"'),
+    searchKeys: find('artist').length === 2 && tree.querySelectorAll('.hit').length === 2,
+    searchClears: find('').length === 0 && !tree.querySelector('.hit, .cur'),
+    // These two replace the input, so they stay last.
     pasteFormats: loadFormatted('{"a":[1.0,true]}') && input.value === '{\n  "a": [\n    1.0,\n    true\n  ]\n}',
     pasteKeepsBadText: !loadFormatted('{"a":') && input.value === '{"a":',
   };
